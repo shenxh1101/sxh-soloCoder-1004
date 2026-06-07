@@ -11,7 +11,7 @@ import type { TimeSlot, Companion } from '@/types';
 
 const VenueDetailPage: React.FC = () => {
   const router = useRouter();
-  const { getVenueById, addBooking, addMessage, addCompanion, bookings, markTimeSlotBooked } = useAppStore();
+  const { getVenueById, addBooking, addMessage, getBookedSlotIds, markTimeSlotBooked } = useAppStore();
   const [venue, setVenue] = useState<any>(null);
   const [selectedDate, setSelectedDate] = useState(formatDate(new Date().toISOString()));
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
@@ -39,17 +39,10 @@ const VenueDetailPage: React.FC = () => {
 
   const bookedSlotIds = useMemo(() => {
     if (!venue) return [];
-    const booked = bookings
-      .filter(
-        (b) =>
-          b.venueId === venue.id &&
-          b.date === selectedDate &&
-          b.status !== 'cancelled'
-      )
-      .map((b) => b.startTime + '-' + b.endTime);
+    const booked = getBookedSlotIds(venue.id, selectedDate);
     console.log('[VenueDetailPage] 已预约时段:', booked);
     return booked;
-  }, [venue, selectedDate, bookings]);
+  }, [venue, selectedDate, getBookedSlotIds]);
 
   const dates = useMemo(() => {
     const result = [];
@@ -141,11 +134,7 @@ const VenueDetailPage: React.FC = () => {
     };
 
     addBooking(newBooking);
-    markTimeSlotBooked(venue.id, selectedDate, `${selectedSlot.startTime}-${selectedSlot.endTime}`);
-
-    companions.forEach((c) => {
-      addCompanion(bookingId, c);
-    });
+    markTimeSlotBooked(venue.id, selectedDate, selectedSlot.id);
 
     addMessage({
       id: generateId(),

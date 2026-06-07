@@ -11,6 +11,7 @@ import {
   getBookingStatusLabel,
   getBookingStatusColor,
   formatDate,
+  formatDateTime,
   generateId
 } from '@/utils';
 import { useAppStore } from '@/store/useAppStore';
@@ -21,7 +22,7 @@ interface BookingCardProps {
 }
 
 const BookingCard: React.FC<BookingCardProps> = ({ booking }) => {
-  const { cancelBooking, addReview, addMessage, rescheduleBooking, getVenueById, bookings } = useAppStore();
+  const { cancelBooking, addReview, addMessage, rescheduleBooking, getVenueById, getBookedSlotIds } = useAppStore();
   const [showReview, setShowReview] = useState(false);
   const [rating, setRating] = useState(5);
   const [reviewContent, setReviewContent] = useState('');
@@ -51,17 +52,9 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking }) => {
 
   const rescheduleBookedSlotIds = useMemo(() => {
     if (!venue) return [];
-    const booked = bookings
-      .filter(
-        (b) =>
-          b.id !== booking.id &&
-          b.venueId === venue.id &&
-          b.date === rescheduleDate &&
-          b.status !== 'cancelled'
-      )
-      .map((b) => b.startTime + '-' + b.endTime);
+    const booked = getBookedSlotIds(venue.id, rescheduleDate, booking.id);
     return booked;
-  }, [venue, rescheduleDate, bookings, booking.id]);
+  }, [venue, rescheduleDate, getBookedSlotIds, booking.id]);
 
   const statusColor = getBookingStatusColor(booking.status);
   const typeColor = getVenueTypeColor(booking.venueType);
@@ -114,6 +107,7 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking }) => {
             booking.id,
             rescheduleDate,
             `${rescheduleSlot.startTime}-${rescheduleSlot.endTime}`,
+            rescheduleSlot.id,
             rescheduleSlot.price
           );
           if (success) {
@@ -169,7 +163,7 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking }) => {
     console.log('[BookingCard] 查看付款记录:', booking.paymentRecord);
     Taro.showModal({
       title: '付款记录',
-      content: `金额：¥${booking.paymentRecord.amount}\n支付方式：${booking.paymentRecord.payMethod}\n支付时间：${formatDate(booking.paymentRecord.payTime)}\n交易单号：${booking.paymentRecord.transactionId}`,
+      content: `金额：¥${booking.paymentRecord.amount}\n支付方式：${booking.paymentRecord.payMethod}\n支付时间：${formatDateTime(booking.paymentRecord.payTime)}\n交易单号：${booking.paymentRecord.transactionId}`,
       showCancel: false
     }).catch((err) => {
       console.error('[BookingCard] 显示付款记录失败:', err);
