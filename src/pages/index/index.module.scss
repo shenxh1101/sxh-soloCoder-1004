@@ -1,0 +1,152 @@
+@use '@/styles/variables.scss' as *;
+
+.container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0 $page-padding;
+  padding-bottom: calc(env(safe-area-inset-bottom) + 120rpx);
+}
+
+.header {
+  padding: $spacing-lg 0 $spacing-md;
+}
+
+.title {
+  font-size: $font-size-xxl;
+  font-weight: $font-weight-bold;
+  color: $color-text-primary;
+  display: block;
+  margin-bottom: $spacing-xs;
+}
+
+.subtitle {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+}
+
+.searchBox {
+  margin-bottom: $spacing-md;
+}
+
+.searchInput {
+  width: 100%;
+  height: 80rpx;
+  background: $color-bg-card;
+  border-radius: $radius-button;
+  padding: 0 $spacing-lg;
+  font-size: $font-size-md;
+  box-shadow: $shadow-card;
+  box-sizing: border-box;
+}
+
+.filterScroll {
+  margin-bottom: $spacing-md;
+  white-space: nowrap;
+}
+
+.filterContainer {
+  @include scroll-x-container;
+  padding-right: $page-padding;
+}
+
+.filterItem {
+  @include scroll-x-item(auto);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-sm $spacing-lg;
+  background: $color-bg-card;
+  border-radius: $radius-button;
+  margin-right: $spacing-sm;
+  transition: all $transition-base;
+
+  &:active {
+    transform: scale(0.96);
+  }
+
+  &.filterItemActive {
+    background: $color-primary;
+
+    .filterText {
+      color: $color-text-white;
+      font-weight: $font-weight-medium;
+    }
+  }
+}
+
+.filterText {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  white-space: nowrap;
+}
+
+.filterTextActive {
+  color: $color-text-white;
+}
+
+.statsRow {
+  display: flex;
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  padding: $spacing-lg;
+  margin-bottom: $spacing-md;
+  box-shadow: $shadow-card;
+}
+
+.statItem {
+  flex: 1;
+  text-align: center;
+}
+
+.statNumber {
+  font-size: $font-size-xl;
+  font-weight: $font-weight-bold;
+  color: $color-primary;
+  display: block;
+  margin-bottom: $spacing-xs;
+}
+
+.statLabel {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.venueList {
+  flex: 1;
+  height: 0;
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80rpx 0;
+}
+
+.emptyIcon {
+  font-size: 80rpx;
+  margin-bottom: $spacing-md;
+}
+
+.emptyText {
+  font-size: $font-size-lg;
+  color: $color-text-secondary;
+  margin-bottom: $spacing-xs;
+}
+
+.emptyTip {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+}
+
+.listFooter {
+  padding: $spacing-lg 0;
+  text-align: center;
+}
+
+.footerText {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}

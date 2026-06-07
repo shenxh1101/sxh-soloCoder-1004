@@ -1,0 +1,98 @@
+@use '@/styles/variables.scss' as *;
+
+.card {
+  display: flex;
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  overflow: hidden;
+  margin-bottom: $spacing-md;
+  box-shadow: $shadow-card;
+  transition: all $transition-base;
+
+  &:active {
+    transform: scale(0.98);
+    box-shadow: $shadow-card-hover;
+  }
+}
+
+.image {
+  width: 240rpx;
+  height: 180rpx;
+  flex-shrink: 0;
+}
+
+.content {
+  flex: 1;
+  padding: $spacing-md;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: $spacing-sm;
+}
+
+.name {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  @include text-ellipsis;
+  flex: 1;
+  margin-right: $spacing-sm;
+}
+
+.infoRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: $spacing-xs;
+}
+
+.infoText {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  @include text-ellipsis;
+  flex: 1;
+}
+
+.slotText {
+  font-size: $font-size-xs;
+  color: $color-success;
+  flex-shrink: 0;
+  margin-left: $spacing-sm;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: $spacing-sm;
+}
+
+.rating {
+  display: flex;
+  align-items: baseline;
+}
+
+.ratingText {
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  color: $color-warning;
+  margin-right: $spacing-xs;
+}
+
+.reviewCount {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.price {
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-primary;
+}

@@ -1,0 +1,72 @@
+@use '@/styles/variables.scss' as *;
+
+.container {
+  margin-bottom: $spacing-lg;
+}
+
+.title {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  margin-bottom: $spacing-md;
+  display: block;
+}
+
+.slotsGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-sm;
+}
+
+.slot {
+  width: calc((100% - 32rpx) / 3);
+  background: $color-bg-card;
+  border: 2rpx solid $color-border;
+  border-radius: $radius-md;
+  padding: $spacing-md $spacing-sm;
+  text-align: center;
+  transition: all $transition-base;
+
+  &:active {
+    transform: scale(0.96);
+  }
+
+  &.selected {
+    background: linear-gradient(135deg, $color-primary 0%, $color-primary-light 100%);
+    border-color: $color-primary;
+
+    .timeText,
+    .priceText {
+      color: $color-text-white;
+    }
+  }
+
+  &.disabled {
+    opacity: 0.5;
+    background: $color-bg-page;
+
+    &:active {
+      transform: none;
+    }
+  }
+}
+
+.timeText {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  color: $color-text-primary;
+  display: block;
+  margin-bottom: 4rpx;
+}
+
+.priceText {
+  font-size: $font-size-xs;
+  color: $color-primary;
+}
+
+.soldOut {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+  display: block;
+  margin-top: 4rpx;
+}
