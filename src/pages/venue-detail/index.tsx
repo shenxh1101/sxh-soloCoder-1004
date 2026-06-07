@@ -11,7 +11,7 @@ import type { TimeSlot, Companion } from '@/types';
 
 const VenueDetailPage: React.FC = () => {
   const router = useRouter();
-  const { getVenueById, addBooking, addMessage, addCompanion } = useAppStore();
+  const { getVenueById, addBooking, addMessage, addCompanion, bookings, markTimeSlotBooked } = useAppStore();
   const [venue, setVenue] = useState<any>(null);
   const [selectedDate, setSelectedDate] = useState(formatDate(new Date().toISOString()));
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
@@ -36,6 +36,20 @@ const VenueDetailPage: React.FC = () => {
       }
     }
   }, [router.params.id, getVenueById]);
+
+  const bookedSlotIds = useMemo(() => {
+    if (!venue) return [];
+    const booked = bookings
+      .filter(
+        (b) =>
+          b.venueId === venue.id &&
+          b.date === selectedDate &&
+          b.status !== 'cancelled'
+      )
+      .map((b) => b.startTime + '-' + b.endTime);
+    console.log('[VenueDetailPage] 已预约时段:', booked);
+    return booked;
+  }, [venue, selectedDate, bookings]);
 
   const dates = useMemo(() => {
     const result = [];
@@ -65,9 +79,15 @@ const VenueDetailPage: React.FC = () => {
       Taro.showToast({ title: '请输入姓名', icon: 'none' });
       return;
     }
+    const nameToAdd = newCompanionName.trim();
+    const exists = companions.some((c) => c.name === nameToAdd);
+    if (exists) {
+      Taro.showToast({ title: '该同行人已添加', icon: 'none' });
+      return;
+    }
     const newCompanion: Companion = {
       id: generateId(),
-      name: newCompanionName.trim(),
+      name: nameToAdd,
       phone: newCompanionPhone.trim() || '未填写'
     };
     console.log('[VenueDetailPage] 添加同行人:', newCompanion);
@@ -121,6 +141,7 @@ const VenueDetailPage: React.FC = () => {
     };
 
     addBooking(newBooking);
+    markTimeSlotBooked(venue.id, selectedDate, `${selectedSlot.startTime}-${selectedSlot.endTime}`);
 
     companions.forEach((c) => {
       addCompanion(bookingId, c);
@@ -258,6 +279,7 @@ const VenueDetailPage: React.FC = () => {
           slots={venue.timeSlots}
           selectedSlotId={selectedSlot?.id}
           onSelect={handleSlotSelect}
+          bookedSlotIds={bookedSlotIds}
         />
 
         <View className={styles.bottomPadding} />

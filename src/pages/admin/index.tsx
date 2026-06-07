@@ -84,34 +84,61 @@ const AdminPage: React.FC = () => {
     setNoticeContent('');
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     console.log('[AdminPage] 导出使用统计');
-    const exportData = {
-      exportTime: formatDateTime(new Date().toISOString()),
-      totalVenues: venues.length,
-      totalBookings: bookings.length,
-      todayBookings: todayBookings.length,
-      todayRevenue: todayRevenue,
-      venueUsage: adminStats.venueUsage,
-      bookings: bookings.map((b) => ({
-        id: b.id,
-        venueName: b.venueName,
-        venueType: b.venueType,
-        date: b.date,
-        timeSlot: b.timeSlot,
-        price: b.price,
-        status: b.status,
-        createTime: formatDateTime(b.createTime)
-      }))
-    };
-    console.log('[AdminPage] 导出数据:', JSON.stringify(exportData, null, 2));
-    Taro.showModal({
-      title: '导出成功',
-      content: `已生成统计报表：\n今日预约：${todayBookings.length}单\n今日营收：¥${todayRevenue}\n总预约数：${bookings.length}单\n\n数据已复制到剪贴板，可粘贴到Excel中查看。`,
-      showCancel: false
-    }).catch((err) => {
-      console.error('[AdminPage] 导出成功弹窗失败:', err);
+    const exportTime = formatDateTime(new Date().toISOString());
+
+    let tsvContent = '场地使用统计报表\n';
+    tsvContent += `导出时间: ${exportTime}\n\n`;
+    tsvContent += '=== 统计摘要 ===\n';
+    tsvContent += `场地总数\t${venues.length}\n`;
+    tsvContent += `总预约数\t${bookings.length}\n`;
+    tsvContent += `今日预约\t${todayBookings.length}\n`;
+    tsvContent += `今日营收\t¥${todayRevenue}\n\n`;
+    tsvContent += '=== 场地使用率 ===\n';
+    tsvContent += '场地名称\t使用率(%)\n';
+    adminStats.venueUsage.forEach((item) => {
+      tsvContent += `${item.venueName}\t${item.usage}\n`;
     });
+    tsvContent += '\n=== 预约明细 ===\n';
+    tsvContent += '预约ID\t场地名称\t场地类型\t日期\t时段\t金额\t状态\t创建时间\n';
+    bookings.forEach((b) => {
+      const typeLabel = b.venueType === 'basketball' ? '篮球' : b.venueType === 'badminton' ? '羽毛球' : '乒乓球';
+      const statusLabel = b.status === 'confirmed' ? '已预约' : b.status === 'pending' ? '待确认' : b.status === 'completed' ? '已完成' : b.status === 'cancelled' ? '已取消' : '已过期';
+      tsvContent += `${b.id}\t${b.venueName}\t${typeLabel}\t${b.date}\t${b.timeSlot}\t¥${b.price}\t${statusLabel}\t${formatDateTime(b.createTime)}\n`;
+    });
+
+    console.log('[AdminPage] 导出数据TSV长度:', tsvContent.length);
+
+    try {
+      await Taro.setClipboardData({
+        data: tsvContent
+      });
+
+      console.log('[AdminPage] 剪贴板复制成功');
+      Taro.showModal({
+        title: '导出成功',
+        content: `已生成统计报表：\n今日预约：${todayBookings.length}单\n今日营收：¥${todayRevenue}\n总预约数：${bookings.length}单\n\n✅ 数据已成功复制到剪贴板！\n您可以直接粘贴到 Excel 中查看（Tab分隔格式）。`,
+        showCancel: false
+      }).catch((err) => {
+        console.error('[AdminPage] 导出成功弹窗失败:', err);
+      });
+    } catch (err) {
+      console.error('[AdminPage] 复制到剪贴板失败:', err);
+      let errorMsg = '未知错误';
+      if (err && typeof err === 'object') {
+        errorMsg = (err as any).errMsg || JSON.stringify(err);
+      } else if (typeof err === 'string') {
+        errorMsg = err;
+      }
+      Taro.showModal({
+        title: '导出失败',
+        content: `数据复制到剪贴板失败：\n${errorMsg}\n\n请检查浏览器权限设置，或稍后重试。`,
+        showCancel: false
+      }).catch((modalErr) => {
+        console.error('[AdminPage] 导出失败弹窗失败:', modalErr);
+      });
+    }
   };
 
   const handleQuickVerify = (booking: Booking) => {

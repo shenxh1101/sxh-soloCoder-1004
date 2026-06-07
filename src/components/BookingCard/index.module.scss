@@ -261,4 +261,117 @@
     color: $color-text-white;
     border: none;
   }
+
+  .modalBtnConfirm[disabled] {
+    opacity: 0.5;
+  }
 }
+
+.rescheduleModalContent {
+  width: 680rpx;
+  max-height: 85vh;
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  padding: $spacing-lg;
+  overflow-y: auto;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: $spacing-lg;
+}
+
+.modalClose {
+  font-size: 40rpx;
+  color: $color-text-tertiary;
+  padding: $spacing-sm;
+}
+
+.rescheduleSection {
+  margin-bottom: $spacing-lg;
+}
+
+.sectionLabel {
+  font-size: $font-size-md;
+  color: $color-text-secondary;
+  margin-bottom: $spacing-sm;
+  display: block;
+}
+
+.dateScroll {
+  white-space: nowrap;
+}
+
+.dateContainer {
+  display: inline-flex;
+  gap: $spacing-sm;
+  padding: $spacing-sm 0;
+}
+
+.dateItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 100rpx;
+  padding: $spacing-md $spacing-sm;
+  background: $color-bg-page;
+  border-radius: $radius-md;
+  border: 2rpx solid transparent;
+  transition: all $transition-base;
+
+  &.dateItemActive {
+    background: $color-primary;
+    border-color: $color-primary;
+  }
+}
+
+.dateDay {
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+  margin-bottom: 4rpx;
+
+  &.dateDayActive {
+    color: $color-text-white;
+  }
+}
+
+.dateNum {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+
+  &.dateNumActive {
+    color: $color-text-white;
+  }
+}
+
+.priceInfo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: $color-bg-page;
+  border-radius: $radius-md;
+  padding: $spacing-md;
+  margin-bottom: $spacing-lg;
+}
+
+.priceLabel {
+  font-size: $font-size-md;
+  color: $color-text-secondary;
+}
+
+.priceValue {
+  font-size: $font-size-xl;
+  font-weight: $font-weight-bold;
+  color: $color-primary;
+}
+
+.priceNote {
+  font-size: $font-size-sm;
+  color: $color-warning;
+  margin-left: $spacing-md;
+}
+

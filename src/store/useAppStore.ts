@@ -22,6 +22,10 @@ interface AppState {
   addCompanion: (bookingId: string, companion: Companion) => void;
   removeCompanion: (bookingId: string, companionId: string) => void;
   getUnreadMessageCount: () => number;
+  markTimeSlotBooked: (venueId: string, date: string, slotId: string) => void;
+  markTimeSlotAvailable: (venueId: string, date: string, slotId: string) => void;
+  isTimeSlotBooked: (venueId: string, date: string, slotId: string) => boolean;
+  rescheduleBooking: (bookingId: string, newDate: string, newSlotId: string, newPrice: number) => boolean;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -112,5 +116,95 @@ export const useAppStore = create<AppState>((set, get) => ({
       )
     })),
 
-  getUnreadMessageCount: () => get().messages.filter((m) => !m.read).length
+  getUnreadMessageCount: () => get().messages.filter((m) => !m.read).length,
+
+  markTimeSlotBooked: (venueId, date, slotId) => {
+    console.log('[Store] 标记时段已预约:', { venueId, date, slotId });
+    set((state) => ({
+      venues: state.venues.map((v) =>
+        v.id === venueId
+          ? {
+              ...v,
+              timeSlots: v.timeSlots.map((s) =>
+                s.id === slotId ? { ...s, available: false } : s
+              )
+            }
+          : v
+      )
+    }));
+  },
+
+  markTimeSlotAvailable: (venueId, date, slotId) => {
+    console.log('[Store] 标记时段可用:', { venueId, date, slotId });
+    set((state) => ({
+      venues: state.venues.map((v) =>
+        v.id === venueId
+          ? {
+              ...v,
+              timeSlots: v.timeSlots.map((s) =>
+                s.id === slotId ? { ...s, available: true } : s
+              )
+            }
+          : v
+      )
+    }));
+  },
+
+  isTimeSlotBooked: (venueId, date, slotId) => {
+    const state = get();
+    const exists = state.bookings.some(
+      (b) =>
+        b.venueId === venueId &&
+        b.date === date &&
+        b.startTime + '-' + b.endTime === slotId &&
+        b.status !== 'cancelled'
+    );
+    return exists;
+  },
+
+  rescheduleBooking: (bookingId, newDate, newSlotId, newPrice) => {
+    console.log('[Store] 改期:', { bookingId, newDate, newSlotId, newPrice });
+    const state = get();
+    const booking = state.bookings.find((b) => b.id === bookingId);
+    if (!booking) return false;
+
+    const oldDate = booking.date;
+    const oldSlotId = booking.startTime + '-' + booking.endTime;
+    const venueId = booking.venueId;
+
+    const [newStartTime, newEndTime] = newSlotId.split('-');
+    const newTimeSlot = newSlotId;
+
+    set((state) => ({
+      bookings: state.bookings.map((b) =>
+        b.id === bookingId
+          ? {
+              ...b,
+              date: newDate,
+              timeSlot: newTimeSlot,
+              startTime: newStartTime,
+              endTime: newEndTime,
+              price: newPrice
+            }
+          : b
+      ),
+      venues: state.venues.map((v) => {
+        if (v.id !== venueId) return v;
+        return {
+          ...v,
+          timeSlots: v.timeSlots.map((s) => {
+            if (s.id === oldSlotId) {
+              return { ...s, available: true };
+            }
+            if (s.id === newSlotId) {
+              return { ...s, available: false };
+            }
+            return s;
+          })
+        };
+      })
+    }));
+
+    return true;
+  }
 }));

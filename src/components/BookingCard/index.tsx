@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, Button, Input } from '@tarojs/components';
+import React, { useState, useMemo } from 'react';
+import { View, Text, Button, Input, ScrollView } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import classnames from 'classnames';
 import styles from './index.module.scss';
 import Tag from '@/components/Tag';
+import TimeSlotPicker from '@/components/TimeSlotPicker';
 import {
   getVenueTypeLabel,
   getVenueTypeColor,
@@ -13,18 +14,54 @@ import {
   generateId
 } from '@/utils';
 import { useAppStore } from '@/store/useAppStore';
-import type { Booking } from '@/types';
+import type { Booking, TimeSlot } from '@/types';
 
 interface BookingCardProps {
   booking: Booking;
 }
 
 const BookingCard: React.FC<BookingCardProps> = ({ booking }) => {
-  const { cancelBooking, addReview, addMessage } = useAppStore();
+  const { cancelBooking, addReview, addMessage, rescheduleBooking, getVenueById, bookings } = useAppStore();
   const [showReview, setShowReview] = useState(false);
   const [rating, setRating] = useState(5);
   const [reviewContent, setReviewContent] = useState('');
   const [showVerifyCode, setShowVerifyCode] = useState(false);
+  const [showReschedule, setShowReschedule] = useState(false);
+  const [rescheduleDate, setRescheduleDate] = useState(formatDate(new Date().toISOString()));
+  const [rescheduleSlot, setRescheduleSlot] = useState<TimeSlot | null>(null);
+
+  const venue = useMemo(() => getVenueById(booking.venueId), [booking.venueId, getVenueById]);
+
+  const rescheduleDates = useMemo(() => {
+    const result = [];
+    const today = new Date();
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + i);
+      const dateStr = formatDate(date.toISOString());
+      const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+      result.push({
+        date: dateStr,
+        day: weekDays[date.getDay()],
+        dayNum: date.getDate()
+      });
+    }
+    return result;
+  }, []);
+
+  const rescheduleBookedSlotIds = useMemo(() => {
+    if (!venue) return [];
+    const booked = bookings
+      .filter(
+        (b) =>
+          b.id !== booking.id &&
+          b.venueId === venue.id &&
+          b.date === rescheduleDate &&
+          b.status !== 'cancelled'
+      )
+      .map((b) => b.startTime + '-' + b.endTime);
+    return booked;
+  }, [venue, rescheduleDate, bookings, booking.id]);
 
   const statusColor = getBookingStatusColor(booking.status);
   const typeColor = getVenueTypeColor(booking.venueType);
@@ -56,7 +93,49 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking }) => {
 
   const handleReschedule = () => {
     console.log('[BookingCard] 改期:', booking.id);
-    Taro.showToast({ title: '改期功能开发中', icon: 'none' });
+    setShowReschedule(true);
+    setRescheduleDate(formatDate(new Date().toISOString()));
+    setRescheduleSlot(null);
+  };
+
+  const handleConfirmReschedule = () => {
+    if (!rescheduleSlot) {
+      Taro.showToast({ title: '请选择新的时段', icon: 'none' });
+      return;
+    }
+    console.log('[BookingCard] 确认改期:', booking.id, rescheduleDate, rescheduleSlot);
+
+    Taro.showModal({
+      title: '确认改期',
+      content: `确定要将预约改期到 ${rescheduleDate} ${rescheduleSlot.startTime}-${rescheduleSlot.endTime} 吗？`,
+      success: (res) => {
+        if (res.confirm) {
+          const success = rescheduleBooking(
+            booking.id,
+            rescheduleDate,
+            `${rescheduleSlot.startTime}-${rescheduleSlot.endTime}`,
+            rescheduleSlot.price
+          );
+          if (success) {
+            addMessage({
+              id: generateId(),
+              type: 'booking',
+              title: '改期成功',
+              content: `您预约的${booking.venueName}已改期到 ${rescheduleDate} ${rescheduleSlot.startTime}-${rescheduleSlot.endTime}。`,
+              time: new Date().toISOString(),
+              read: false,
+              relatedBookingId: booking.id
+            });
+            Taro.showToast({ title: '改期成功', icon: 'success' });
+            setShowReschedule(false);
+          } else {
+            Taro.showToast({ title: '改期失败，请重试', icon: 'error' });
+          }
+        }
+      }
+    }).catch((err) => {
+      console.error('[BookingCard] 改期确认弹窗失败:', err);
+    });
   };
 
   const handleShowVerify = () => {
@@ -77,7 +156,16 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking }) => {
   };
 
   const handleViewPayment = () => {
-    if (!booking.paymentRecord) return;
+    if (!booking.paymentRecord) {
+      Taro.showModal({
+        title: '付款记录',
+        content: '该订单暂无付款记录，可能是预约尚未完成支付或支付信息未同步。',
+        showCancel: false
+      }).catch((err) => {
+        console.error('[BookingCard] 显示无付款记录弹窗失败:', err);
+      });
+      return;
+    }
     console.log('[BookingCard] 查看付款记录:', booking.paymentRecord);
     Taro.showModal({
       title: '付款记录',
@@ -96,6 +184,8 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking }) => {
       console.error('[BookingCard] 跳转场地详情失败:', err);
     });
   };
+
+  const showPaymentButton = ['pending', 'confirmed', 'completed'].includes(booking.status);
 
   return (
     <View className={styles.card}>
@@ -203,6 +293,11 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking }) => {
             付款记录
           </Button>
         )}
+        {showPaymentButton && booking.status !== 'completed' && (
+          <Button className={classnames(styles.btn, styles.btnOutline)} onClick={handleViewPayment}>
+            付款记录
+          </Button>
+        )}
         {booking.status === 'cancelled' && booking.paymentRecord && (
           <Button className={classnames(styles.btn, styles.btnOutline)} onClick={handleViewPayment}>
             退款记录
@@ -246,6 +341,102 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking }) => {
                 onClick={handleSubmitReview}
               >
                 提交
+              </Button>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {showReschedule && venue && (
+        <View className={styles.reviewModal}>
+          <View className={styles.rescheduleModalContent}>
+            <View className={styles.modalHeader}>
+              <Text className={styles.modalTitle}>选择新的预约时间</Text>
+              <Text
+                className={styles.modalClose}
+                onClick={() => setShowReschedule(false)}
+              >
+                ✕
+              </Text>
+            </View>
+
+            <View className={styles.rescheduleSection}>
+              <Text className={styles.sectionLabel}>选择日期</Text>
+              <ScrollView
+                className={styles.dateScroll}
+                scrollX
+                enhanced
+                showScrollbar={false}
+              >
+                <View className={styles.dateContainer}>
+                  {rescheduleDates.map((d) => (
+                    <View
+                      key={d.date}
+                      className={classnames(
+                        styles.dateItem,
+                        rescheduleDate === d.date && styles.dateItemActive
+                      )}
+                      onClick={() => {
+                        setRescheduleDate(d.date);
+                        setRescheduleSlot(null);
+                      }}
+                    >
+                      <Text
+                        className={classnames(
+                          styles.dateDay,
+                          rescheduleDate === d.date && styles.dateDayActive
+                        )}
+                      >
+                        {d.day}
+                      </Text>
+                      <Text
+                        className={classnames(
+                          styles.dateNum,
+                          rescheduleDate === d.date && styles.dateNumActive
+                        )}
+                      >
+                        {d.dayNum}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
+
+            <TimeSlotPicker
+              slots={venue.timeSlots}
+              selectedSlotId={rescheduleSlot?.id}
+              onSelect={(slot) => setRescheduleSlot(slot)}
+              bookedSlotIds={rescheduleBookedSlotIds}
+            />
+
+            {rescheduleSlot && (
+              <View className={styles.priceInfo}>
+                <Text className={styles.priceLabel}>新价格</Text>
+                <Text className={styles.priceValue}>¥{rescheduleSlot.price}</Text>
+                {rescheduleSlot.price !== booking.price && (
+                  <Text className={styles.priceNote}>
+                    {rescheduleSlot.price > booking.price
+                      ? `需补差价 ¥${rescheduleSlot.price - booking.price}`
+                      : `将退还差价 ¥${booking.price - rescheduleSlot.price}`}
+                  </Text>
+                )}
+              </View>
+            )}
+
+            <View className={styles.modalActions}>
+              <Button
+                className={classnames(styles.modalBtn, styles.modalBtnCancel)}
+                onClick={() => setShowReschedule(false)}
+              >
+                取消
+              </Button>
+              <Button
+                className={classnames(styles.modalBtn, styles.modalBtnConfirm)}
+                onClick={handleConfirmReschedule}
+                disabled={!rescheduleSlot}
+              >
+                确认改期
               </Button>
             </View>
           </View>

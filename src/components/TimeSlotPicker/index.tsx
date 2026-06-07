@@ -8,11 +8,14 @@ interface TimeSlotPickerProps {
   slots: TimeSlot[];
   selectedSlotId?: string;
   onSelect?: (slot: TimeSlot) => void;
+  bookedSlotIds?: string[];
 }
 
-const TimeSlotPicker: React.FC<TimeSlotPickerProps> = ({ slots, selectedSlotId, onSelect }) => {
+const TimeSlotPicker: React.FC<TimeSlotPickerProps> = ({ slots, selectedSlotId, onSelect, bookedSlotIds = [] }) => {
+  const isSlotBooked = (slotId: string) => bookedSlotIds.includes(slotId);
+
   const handleSelect = (slot: TimeSlot) => {
-    if (!slot.available) return;
+    if (!slot.available || isSlotBooked(slot.id)) return;
     console.log('[TimeSlotPicker] 选择时段:', slot.id, slot.startTime, slot.endTime);
     if (onSelect) {
       onSelect(slot);
@@ -23,23 +26,27 @@ const TimeSlotPicker: React.FC<TimeSlotPickerProps> = ({ slots, selectedSlotId, 
     <View className={styles.container}>
       <Text className={styles.title}>选择时段</Text>
       <View className={styles.slotsGrid}>
-        {slots.map((slot) => (
-          <View
-            key={slot.id}
-            className={classnames(
-              styles.slot,
-              !slot.available && styles.disabled,
-              selectedSlotId === slot.id && styles.selected
-            )}
-            onClick={() => handleSelect(slot)}
-          >
-            <Text className={styles.timeText}>
-              {slot.startTime}-{slot.endTime}
-            </Text>
-            <Text className={styles.priceText}>¥{slot.price}</Text>
-            {!slot.available && <Text className={styles.soldOut}>已约满</Text>}
-          </View>
-        ))}
+        {slots.map((slot) => {
+          const booked = isSlotBooked(slot.id);
+          return (
+            <View
+              key={slot.id}
+              className={classnames(
+                styles.slot,
+                (!slot.available || booked) && styles.disabled,
+                selectedSlotId === slot.id && styles.selected
+              )}
+              onClick={() => handleSelect(slot)}
+            >
+              <Text className={styles.timeText}>
+                {slot.startTime}-{slot.endTime}
+              </Text>
+              <Text className={styles.priceText}>¥{slot.price}</Text>
+              {booked && <Text className={styles.soldOut}>已占用</Text>}
+              {!slot.available && !booked && <Text className={styles.soldOut}>已约满</Text>}
+            </View>
+          );
+        })}
       </View>
     </View>
   );
