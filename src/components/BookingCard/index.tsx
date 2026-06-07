@@ -22,13 +22,13 @@ interface BookingCardProps {
 }
 
 const BookingCard: React.FC<BookingCardProps> = ({ booking }) => {
-  const { cancelBooking, addReview, addMessage, rescheduleBooking, getVenueById, getBookedSlotIds } = useAppStore();
+  const { cancelBooking, addReview, addMessage, rescheduleBooking, getVenueById, getBookedSlotIds, getMaintenanceSlotIds } = useAppStore();
   const [showReview, setShowReview] = useState(false);
   const [rating, setRating] = useState(5);
   const [reviewContent, setReviewContent] = useState('');
   const [showVerifyCode, setShowVerifyCode] = useState(false);
   const [showReschedule, setShowReschedule] = useState(false);
-  const [rescheduleDate, setRescheduleDate] = useState(formatDate(new Date().toISOString()));
+  const [rescheduleDate, setRescheduleDate] = useState(booking.date);
   const [rescheduleSlot, setRescheduleSlot] = useState<TimeSlot | null>(null);
 
   const venue = useMemo(() => getVenueById(booking.venueId), [booking.venueId, getVenueById]);
@@ -55,6 +55,12 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking }) => {
     const booked = getBookedSlotIds(venue.id, rescheduleDate, booking.id);
     return booked;
   }, [venue, rescheduleDate, getBookedSlotIds, booking.id]);
+
+  const rescheduleMaintenanceSlotIds = useMemo(() => {
+    if (!venue) return [];
+    const maintenance = getMaintenanceSlotIds(venue.id, rescheduleDate);
+    return maintenance;
+  }, [venue, rescheduleDate, getMaintenanceSlotIds]);
 
   const statusColor = getBookingStatusColor(booking.status);
   const typeColor = getVenueTypeColor(booking.venueType);
@@ -87,7 +93,7 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking }) => {
   const handleReschedule = () => {
     console.log('[BookingCard] 改期:', booking.id);
     setShowReschedule(true);
-    setRescheduleDate(formatDate(new Date().toISOString()));
+    setRescheduleDate(booking.date);
     setRescheduleSlot(null);
   };
 
@@ -111,11 +117,20 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking }) => {
             rescheduleSlot.price
           );
           if (success) {
+            const priceDiff = rescheduleSlot.price - booking.price;
+            let priceMsg = '';
+            if (priceDiff > 0) {
+              priceMsg = `需补差价 ¥${priceDiff}，将从原支付账户扣除。`;
+            } else if (priceDiff < 0) {
+              priceMsg = `将退还差价 ¥${Math.abs(priceDiff)}，1-3个工作日内到账。`;
+            } else {
+              priceMsg = '价格不变，无需额外操作。';
+            }
             addMessage({
               id: generateId(),
               type: 'booking',
               title: '改期成功',
-              content: `您预约的${booking.venueName}已改期到 ${rescheduleDate} ${rescheduleSlot.startTime}-${rescheduleSlot.endTime}。`,
+              content: `您预约的${booking.venueName}已改期：\n原时间：${booking.date} ${booking.timeSlot}\n新时间：${rescheduleDate} ${rescheduleSlot.startTime}-${rescheduleSlot.endTime}\n新价格：¥${rescheduleSlot.price}\n${priceMsg}`,
               time: new Date().toISOString(),
               read: false,
               relatedBookingId: booking.id
@@ -402,6 +417,7 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking }) => {
               selectedSlotId={rescheduleSlot?.id}
               onSelect={(slot) => setRescheduleSlot(slot)}
               bookedSlotIds={rescheduleBookedSlotIds}
+              maintenanceSlotIds={rescheduleMaintenanceSlotIds}
             />
 
             {rescheduleSlot && (

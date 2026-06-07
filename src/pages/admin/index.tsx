@@ -1,25 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, Button, Input, Textarea } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import classnames from 'classnames';
 import styles from './index.module.scss';
 import Tag from '@/components/Tag';
+import TimeSlotPicker from '@/components/TimeSlotPicker';
 import { useAppStore } from '@/store/useAppStore';
 import { getVenueTypeColor, formatDate, formatDateTime, generateId } from '@/utils';
-import type { Booking, MessageType } from '@/types';
+import type { Booking, MessageType, Maintenance, TimeSlot } from '@/types';
 
 const AdminPage: React.FC = () => {
-  const { bookings, adminStats, venues, addMessage, updateBooking } = useAppStore();
-  const [activeTab, setActiveTab] = useState<'stats' | 'verify' | 'list' | 'notice' | 'export'>('stats');
+  const { bookings, adminStats, venues, addMessage, updateBooking, addMaintenance, maintenances, getBookedSlotIds } = useAppStore();
+  const [activeTab, setActiveTab] = useState<'stats' | 'verify' | 'list' | 'notice' | 'export' | 'maintenance'>('stats');
   const [verifyCode, setVerifyCode] = useState('');
   const [noticeTitle, setNoticeTitle] = useState('');
   const [noticeContent, setNoticeContent] = useState('');
   const [noticeType, setNoticeType] = useState<MessageType>('maintenance');
+  const [maintenanceVenueId, setMaintenanceVenueId] = useState('');
+  const [maintenanceDate, setMaintenanceDate] = useState(formatDate(new Date().toISOString()));
+  const [maintenanceSlot, setMaintenanceSlot] = useState<TimeSlot | null>(null);
+  const [maintenanceReason, setMaintenanceReason] = useState('');
 
   const tabs = [
     { key: 'stats', label: '数据统计' },
     { key: 'verify', label: '手动核销' },
     { key: 'list', label: '预约列表' },
+    { key: 'maintenance', label: '场地维护' },
     { key: 'notice', label: '发布通知' },
     { key: 'export', label: '导出数据' }
   ];
@@ -29,6 +35,103 @@ const AdminPage: React.FC = () => {
   );
 
   const todayRevenue = todayBookings.reduce((sum, b) => sum + b.price, 0);
+
+  const maintenanceDates = useMemo(() => {
+    const result = [];
+    const today = new Date();
+    for (let i = 0; i < 14; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + i);
+      const dateStr = formatDate(date.toISOString());
+      const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+      result.push({
+        date: dateStr,
+        day: weekDays[date.getDay()],
+        dayNum: date.getDate()
+      });
+    }
+    return result;
+  }, []);
+
+  const selectedVenueForMaintenance = useMemo(() => {
+    if (!maintenanceVenueId) return null;
+    return venues.find((v) => v.id === maintenanceVenueId);
+  }, [maintenanceVenueId, venues]);
+
+  const maintenanceBookedSlotIds = useMemo(() => {
+    if (!maintenanceVenueId) return [];
+    return getBookedSlotIds(maintenanceVenueId, maintenanceDate);
+  }, [maintenanceVenueId, maintenanceDate, getBookedSlotIds]);
+
+  const activeMaintenances = useMemo(() => {
+    const today = formatDate(new Date().toISOString());
+    return maintenances.filter((m) => m.date >= today);
+  }, [maintenances]);
+
+  const handleAddMaintenance = () => {
+    if (!maintenanceVenueId) {
+      Taro.showToast({ title: '请选择场地', icon: 'none' });
+      return;
+    }
+    if (!maintenanceSlot) {
+      Taro.showToast({ title: '请选择时段', icon: 'none' });
+      return;
+    }
+    if (!maintenanceReason.trim()) {
+      Taro.showToast({ title: '请填写维护原因', icon: 'none' });
+      return;
+    }
+
+    console.log('[AdminPage] 发布场地维护:', {
+      venueId: maintenanceVenueId,
+      date: maintenanceDate,
+      slot: maintenanceSlot,
+      reason: maintenanceReason
+    });
+
+    const newMaintenance: Maintenance = {
+      id: generateId(),
+      venueId: maintenanceVenueId,
+      venueName: selectedVenueForMaintenance!.name,
+      date: maintenanceDate,
+      slotId: maintenanceSlot.id,
+      startTime: maintenanceSlot.startTime,
+      endTime: maintenanceSlot.endTime,
+      reason: maintenanceReason.trim(),
+      createTime: new Date().toISOString()
+    };
+
+    addMaintenance(newMaintenance);
+
+    addMessage({
+      id: generateId(),
+      type: 'maintenance',
+      title: '场地维护通知',
+      content: `${selectedVenueForMaintenance!.name} 将在 ${maintenanceDate} ${maintenanceSlot.startTime}-${maintenanceSlot.endTime} 进行${maintenanceReason.trim()}，请合理安排您的预约时间。`,
+      time: new Date().toISOString(),
+      read: false
+    });
+
+    Taro.showToast({ title: '发布成功', icon: 'success' });
+    setMaintenanceVenueId('');
+    setMaintenanceSlot(null);
+    setMaintenanceReason('');
+  };
+
+  const handleRemoveMaintenance = (id: string) => {
+    Taro.showModal({
+      title: '取消维护',
+      content: '确定要取消该维护安排吗？',
+      success: (res) => {
+        if (res.confirm) {
+          useAppStore.getState().removeMaintenance(id);
+          Taro.showToast({ title: '已取消', icon: 'success' });
+        }
+      }
+    }).catch((err) => {
+      console.error('[AdminPage] 取消维护弹窗失败:', err);
+    });
+  };
 
   const handleVerify = () => {
     if (!verifyCode.trim()) {
@@ -317,6 +420,134 @@ const AdminPage: React.FC = () => {
                 <Text className={styles.emptyIcon}>📋</Text>
                 <Text className={styles.emptyText}>今日暂无预约</Text>
               </View>
+            )}
+          </View>
+        )}
+
+        {activeTab === 'maintenance' && (
+          <View>
+            <Text className={styles.sectionTitle}>场地维护管理</Text>
+            <Text className={styles.sectionDesc}>设置场地停用时段，发布后用户无法预约对应时段</Text>
+
+            {activeMaintenances.length > 0 && (
+              <View className={styles.maintenanceList}>
+                <Text className={styles.sectionSubTitle}>进行中的维护</Text>
+                {activeMaintenances.map((m) => (
+                  <View key={m.id} className={styles.maintenanceItem}>
+                    <View className={styles.maintenanceInfo}>
+                      <Text className={styles.maintenanceVenue}>{m.venueName}</Text>
+                      <Text className={styles.maintenanceTime}>
+                        {m.date} {m.startTime}-{m.endTime}
+                      </Text>
+                      <Text className={styles.maintenanceReason}>{m.reason}</Text>
+                    </View>
+                    <Button
+                      className={classnames(styles.btn, styles.btnDanger)}
+                      onClick={() => handleRemoveMaintenance(m.id)}
+                    >
+                      取消
+                    </Button>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            <View className={styles.formItem}>
+              <Text className={styles.label}>选择场地</Text>
+              <ScrollView className={styles.venueScroll} scrollX enhanced showScrollbar={false}>
+                <View className={styles.venueOptions}>
+                  {venues.map((v) => (
+                    <View
+                      key={v.id}
+                      className={classnames(
+                        styles.venueOption,
+                        maintenanceVenueId === v.id && styles.venueOptionActive
+                      )}
+                      onClick={() => {
+                        setMaintenanceVenueId(v.id);
+                        setMaintenanceSlot(null);
+                      }}
+                    >
+                      <Text
+                        className={classnames(
+                          styles.venueOptionText,
+                          maintenanceVenueId === v.id && styles.venueOptionTextActive
+                        )}
+                      >
+                        {v.name}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
+
+            {maintenanceVenueId && (
+              <>
+                <View className={styles.formItem}>
+                  <Text className={styles.label}>选择日期</Text>
+                  <ScrollView
+                    className={styles.dateScroll}
+                    scrollX
+                    enhanced
+                    showScrollbar={false}
+                  >
+                    <View className={styles.dateContainer}>
+                      {maintenanceDates.map((d) => (
+                        <View
+                          key={d.date}
+                          className={classnames(
+                            styles.dateItem,
+                            maintenanceDate === d.date && styles.dateItemActive
+                          )}
+                          onClick={() => {
+                            setMaintenanceDate(d.date);
+                            setMaintenanceSlot(null);
+                          }}
+                        >
+                          <Text
+                            className={classnames(
+                              styles.dateDay,
+                              maintenanceDate === d.date && styles.dateDayActive
+                            )}
+                          >
+                            {d.day}
+                          </Text>
+                          <Text
+                            className={classnames(
+                              styles.dateNum,
+                              maintenanceDate === d.date && styles.dateNumActive
+                            )}
+                          >
+                            {d.dayNum}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  </ScrollView>
+                </View>
+
+                <TimeSlotPicker
+                  slots={selectedVenueForMaintenance!.timeSlots}
+                  selectedSlotId={maintenanceSlot?.id}
+                  onSelect={(slot) => setMaintenanceSlot(slot)}
+                  bookedSlotIds={maintenanceBookedSlotIds}
+                />
+
+                <View className={styles.formItem}>
+                  <Text className={styles.label}>维护原因</Text>
+                  <Textarea
+                    className={styles.formTextarea}
+                    placeholder='请输入维护原因（如：场地清洁、设备检修等）'
+                    value={maintenanceReason}
+                    onInput={(e) => setMaintenanceReason(e.detail.value)}
+                  />
+                </View>
+
+                <Button className={styles.publishBtn} onClick={handleAddMaintenance}>
+                  发布维护通知
+                </Button>
+              </>
             )}
           </View>
         )}

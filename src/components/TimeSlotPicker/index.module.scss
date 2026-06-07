@@ -49,6 +49,12 @@
       transform: none;
     }
   }
+
+  &.maintenance {
+    opacity: 0.6;
+    background: #fff7e6;
+    border-color: #ff7d00;
+  }
 }
 
 .timeText {
@@ -67,6 +73,14 @@
 .soldOut {
   font-size: $font-size-xs;
   color: $color-text-tertiary;
+  display: block;
+  margin-top: 4rpx;
+}
+
+.maintenanceTag {
+  font-size: $font-size-xs;
+  color: #ff7d00;
+  font-weight: $font-weight-medium;
   display: block;
   margin-top: 4rpx;
 }

@@ -11,7 +11,7 @@ import type { TimeSlot, Companion } from '@/types';
 
 const VenueDetailPage: React.FC = () => {
   const router = useRouter();
-  const { getVenueById, addBooking, addMessage, getBookedSlotIds, markTimeSlotBooked } = useAppStore();
+  const { getVenueById, addBooking, addMessage, getBookedSlotIds, getMaintenanceSlotIds } = useAppStore();
   const [venue, setVenue] = useState<any>(null);
   const [selectedDate, setSelectedDate] = useState(formatDate(new Date().toISOString()));
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
@@ -43,6 +43,13 @@ const VenueDetailPage: React.FC = () => {
     console.log('[VenueDetailPage] 已预约时段:', booked);
     return booked;
   }, [venue, selectedDate, getBookedSlotIds]);
+
+  const maintenanceSlotIds = useMemo(() => {
+    if (!venue) return [];
+    const maintenance = getMaintenanceSlotIds(venue.id, selectedDate);
+    console.log('[VenueDetailPage] 维护时段:', maintenance);
+    return maintenance;
+  }, [venue, selectedDate, getMaintenanceSlotIds]);
 
   const dates = useMemo(() => {
     const result = [];
@@ -134,7 +141,6 @@ const VenueDetailPage: React.FC = () => {
     };
 
     addBooking(newBooking);
-    markTimeSlotBooked(venue.id, selectedDate, selectedSlot.id);
 
     addMessage({
       id: generateId(),
@@ -269,6 +275,7 @@ const VenueDetailPage: React.FC = () => {
           selectedSlotId={selectedSlot?.id}
           onSelect={handleSlotSelect}
           bookedSlotIds={bookedSlotIds}
+          maintenanceSlotIds={maintenanceSlotIds}
         />
 
         <View className={styles.bottomPadding} />

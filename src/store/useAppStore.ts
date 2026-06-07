@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Venue, Booking, Message, Companion, AdminStats } from '@/types';
+import type { Venue, Booking, Message, Companion, AdminStats, Maintenance } from '@/types';
 import { venues } from '@/data/venues';
 import { bookings } from '@/data/bookings';
 import { messages } from '@/data/messages';
@@ -8,6 +8,7 @@ interface AppState {
   venues: Venue[];
   bookings: Booking[];
   messages: Message[];
+  maintenances: Maintenance[];
   currentVenueFilter: string;
   adminStats: AdminStats;
   setVenueFilter: (filter: string) => void;
@@ -22,17 +23,25 @@ interface AppState {
   addCompanion: (bookingId: string, companion: Companion) => void;
   removeCompanion: (bookingId: string, companionId: string) => void;
   getUnreadMessageCount: () => number;
-  markTimeSlotBooked: (venueId: string, date: string, slotId: string) => void;
-  markTimeSlotAvailable: (venueId: string, date: string, slotId: string) => void;
-  isTimeSlotBooked: (venueId: string, date: string, slotId: string) => boolean;
+  getUnavailableSlotIds: (venueId: string, date: string, excludeBookingId?: string) => string[];
   getBookedSlotIds: (venueId: string, date: string, excludeBookingId?: string) => string[];
-  rescheduleBooking: (bookingId: string, newDate: string, newSlotId: string, newSlotTimeId: string, newPrice: number) => boolean;
+  getMaintenanceSlotIds: (venueId: string, date: string) => string[];
+  addMaintenance: (maintenance: Maintenance) => void;
+  removeMaintenance: (id: string) => void;
+  rescheduleBooking: (
+    bookingId: string,
+    newDate: string,
+    newSlotTimeRange: string,
+    newSlotTimeId: string,
+    newPrice: number
+  ) => boolean;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
   venues,
   bookings,
   messages,
+  maintenances: [],
   currentVenueFilter: 'all',
   adminStats: {
     todayBookings: 12,
@@ -63,40 +72,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       )
     })),
 
-  cancelBooking: (id) => {
-    const state = get();
-    const booking = state.bookings.find((b) => b.id === id);
-    if (!booking) {
-      set((state) => ({
-        bookings: state.bookings.map((b) =>
-          b.id === id ? { ...b, status: 'cancelled' as const } : b
-        )
-      }));
-      return;
-    }
-
-    const venue = state.venues.find((v) => v.id === booking.venueId);
-    const slot = venue?.timeSlots.find(
-      (s) => s.startTime === booking.startTime && s.endTime === booking.endTime
-    );
-
+  cancelBooking: (id) =>
     set((state) => ({
       bookings: state.bookings.map((b) =>
         b.id === id ? { ...b, status: 'cancelled' as const } : b
-      ),
-      venues: slot
-        ? state.venues.map((v) => {
-            if (v.id !== booking.venueId) return v;
-            return {
-              ...v,
-              timeSlots: v.timeSlots.map((s) =>
-                s.id === slot.id ? { ...s, available: true } : s
-              )
-            };
-          })
-        : state.venues
-    }));
-  },
+      )
+    })),
 
   addReview: (bookingId, rating, content) =>
     set((state) => ({
@@ -147,57 +128,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   getUnreadMessageCount: () => get().messages.filter((m) => !m.read).length,
 
-  markTimeSlotBooked: (venueId, date, slotId) => {
-    console.log('[Store] 标记时段已预约:', { venueId, date, slotId });
-    set((state) => ({
-      venues: state.venues.map((v) =>
-        v.id === venueId
-          ? {
-              ...v,
-              timeSlots: v.timeSlots.map((s) =>
-                s.id === slotId ? { ...s, available: false } : s
-              )
-            }
-          : v
-      )
-    }));
-  },
-
-  markTimeSlotAvailable: (venueId, date, slotId) => {
-    console.log('[Store] 标记时段可用:', { venueId, date, slotId });
-    set((state) => ({
-      venues: state.venues.map((v) =>
-        v.id === venueId
-          ? {
-              ...v,
-              timeSlots: v.timeSlots.map((s) =>
-                s.id === slotId ? { ...s, available: true } : s
-              )
-            }
-          : v
-      )
-    }));
-  },
-
-  isTimeSlotBooked: (venueId, date, slotId) => {
-    const state = get();
-    const venue = state.venues.find((v) => v.id === venueId);
-    if (!venue) return false;
-
-    const slot = venue.timeSlots.find((s) => s.id === slotId);
-    if (!slot) return false;
-
-    const exists = state.bookings.some(
-      (b) =>
-        b.venueId === venueId &&
-        b.date === date &&
-        b.startTime === slot.startTime &&
-        b.endTime === slot.endTime &&
-        b.status !== 'cancelled'
-    );
-    return exists;
-  },
-
   getBookedSlotIds: (venueId, date, excludeBookingId) => {
     const state = get();
     const venue = state.venues.find((v) => v.id === venueId);
@@ -221,25 +151,37 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     });
 
-    console.log('[Store] getBookedSlotIds:', { venueId, date, excludeBookingId, bookedSlotIds });
     return bookedSlotIds;
   },
+
+  getMaintenanceSlotIds: (venueId, date) => {
+    const state = get();
+    return state.maintenances
+      .filter((m) => m.venueId === venueId && m.date === date)
+      .map((m) => m.slotId);
+  },
+
+  getUnavailableSlotIds: (venueId, date, excludeBookingId) => {
+    const booked = get().getBookedSlotIds(venueId, date, excludeBookingId);
+    const maintenance = get().getMaintenanceSlotIds(venueId, date);
+    return [...new Set([...booked, ...maintenance])];
+  },
+
+  addMaintenance: (maintenance) =>
+    set((state) => ({
+      maintenances: [maintenance, ...state.maintenances]
+    })),
+
+  removeMaintenance: (id) =>
+    set((state) => ({
+      maintenances: state.maintenances.filter((m) => m.id !== id)
+    })),
 
   rescheduleBooking: (bookingId, newDate, newSlotTimeRange, newSlotTimeId, newPrice) => {
     console.log('[Store] 改期:', { bookingId, newDate, newSlotTimeRange, newSlotTimeId, newPrice });
     const state = get();
     const booking = state.bookings.find((b) => b.id === bookingId);
     if (!booking) return false;
-
-    const venueId = booking.venueId;
-    const venue = state.venues.find((v) => v.id === venueId);
-    if (!venue) return false;
-
-    const oldSlot = venue.timeSlots.find(
-      (s) => s.startTime === booking.startTime && s.endTime === booking.endTime
-    );
-    const newSlot = venue.timeSlots.find((s) => s.id === newSlotTimeId);
-    if (!newSlot) return false;
 
     const [newStartTime, newEndTime] = newSlotTimeRange.split('-');
 
@@ -255,22 +197,7 @@ export const useAppStore = create<AppState>((set, get) => ({
               price: newPrice
             }
           : b
-      ),
-      venues: state.venues.map((v) => {
-        if (v.id !== venueId) return v;
-        return {
-          ...v,
-          timeSlots: v.timeSlots.map((s) => {
-            if (oldSlot && s.id === oldSlot.id) {
-              return { ...s, available: true };
-            }
-            if (s.id === newSlotTimeId) {
-              return { ...s, available: false };
-            }
-            return s;
-          })
-        };
-      })
+      )
     }));
 
     return true;

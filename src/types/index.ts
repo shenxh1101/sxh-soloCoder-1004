@@ -78,6 +78,18 @@ export interface Message {
   relatedBookingId?: string;
 }
 
+export interface Maintenance {
+  id: string;
+  venueId: string;
+  venueName: string;
+  date: string;
+  slotId: string;
+  startTime: string;
+  endTime: string;
+  reason: string;
+  createTime: string;
+}
+
 export interface AdminStats {
   todayBookings: number;
   todayRevenue: number;
