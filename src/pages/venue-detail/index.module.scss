@@ -182,6 +182,131 @@
   color: $color-text-white;
 }
 
+.dateItemPast {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.dateDayPast {
+  color: $color-text-tertiary;
+}
+
+.dateNumPast {
+  color: $color-text-tertiary;
+}
+
+.calendarHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: $spacing-md;
+}
+
+.calendarViewSwitch {
+  display: flex;
+  background: $color-bg-page;
+  border-radius: $radius-button;
+  padding: 4rpx;
+}
+
+.viewSwitchBtn {
+  padding: $spacing-sm $spacing-md;
+  border-radius: $radius-button;
+  transition: all $transition-base;
+}
+
+.viewSwitchBtnActive {
+  background: $color-primary;
+}
+
+.viewSwitchText {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.viewSwitchTextActive {
+  color: $color-text-white;
+}
+
+.monthNav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: $spacing-md;
+}
+
+.monthNavBtn {
+  font-size: $font-size-xl;
+  color: $color-text-secondary;
+  padding: $spacing-sm $spacing-md;
+}
+
+.monthTitle {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.dateStats {
+  display: flex;
+  gap: 4rpx;
+  margin-top: $spacing-xs;
+  justify-content: center;
+}
+
+.statDot {
+  width: 32rpx;
+  height: 32rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.statAvailable {
+  background: $color-success;
+}
+
+.statBooked {
+  background: $color-text-tertiary;
+}
+
+.statMaintenance {
+  background: #ff7d00;
+}
+
+.statText {
+  font-size: 20rpx;
+  color: $color-text-white;
+  font-weight: $font-weight-semibold;
+}
+
+.legend {
+  display: flex;
+  justify-content: center;
+  gap: $spacing-lg;
+  margin-top: $spacing-md;
+  padding-top: $spacing-md;
+  border-top: 2rpx solid $color-border;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: $spacing-xs;
+}
+
+.legendDot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+}
+
+.legendText {
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+}
+
 .bottomPadding {
   height: 40rpx;
 }

@@ -34,6 +34,8 @@ export interface Companion {
   phone: string;
 }
 
+export type PaymentType = 'original' | 'difference' | 'refund';
+
 export interface Booking {
   id: string;
   venueId: string;
@@ -50,11 +52,13 @@ export interface Booking {
   verifyCode: string;
   createTime: string;
   paymentRecord?: PaymentRecord;
+  paymentRecords?: PaymentRecord[];
   review?: Review;
 }
 
 export interface PaymentRecord {
   id: string;
+  type: PaymentType;
   amount: number;
   payMethod: string;
   payTime: string;

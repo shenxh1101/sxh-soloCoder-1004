@@ -21,11 +21,22 @@ export const bookings: Booking[] = [
     createTime: '2026-06-07T10:30:00Z',
     paymentRecord: {
       id: 'p1',
+      type: 'original',
       amount: 50,
       payMethod: '微信支付',
       payTime: '2026-06-07T10:30:05Z',
       transactionId: '2026060712345678'
-    }
+    },
+    paymentRecords: [
+      {
+        id: 'p1',
+        type: 'original',
+        amount: 50,
+        payMethod: '微信支付',
+        payTime: '2026-06-07T10:30:05Z',
+        transactionId: '2026060712345678'
+      }
+    ]
   },
   {
     id: 'b2',
@@ -44,11 +55,22 @@ export const bookings: Booking[] = [
     createTime: '2026-06-08T09:15:00Z',
     paymentRecord: {
       id: 'p2',
+      type: 'original',
       amount: 60,
       payMethod: '支付宝',
       payTime: '2026-06-08T09:15:10Z',
       transactionId: '2026060887654321'
-    }
+    },
+    paymentRecords: [
+      {
+        id: 'p2',
+        type: 'original',
+        amount: 60,
+        payMethod: '支付宝',
+        payTime: '2026-06-08T09:15:10Z',
+        transactionId: '2026060887654321'
+      }
+    ]
   },
   {
     id: 'b3',
@@ -67,11 +89,22 @@ export const bookings: Booking[] = [
     createTime: '2026-06-05T14:00:00Z',
     paymentRecord: {
       id: 'p3',
+      type: 'original',
       amount: 30,
       payMethod: '微信支付',
       payTime: '2026-06-05T14:00:05Z',
       transactionId: '2026060511112222'
     },
+    paymentRecords: [
+      {
+        id: 'p3',
+        type: 'original',
+        amount: 30,
+        payMethod: '微信支付',
+        payTime: '2026-06-05T14:00:05Z',
+        transactionId: '2026060511112222'
+      }
+    ],
     review: {
       id: 'r1',
       rating: 5,
@@ -115,11 +148,22 @@ export const bookings: Booking[] = [
     createTime: '2026-06-08T11:45:00Z',
     paymentRecord: {
       id: 'p4',
+      type: 'original',
       amount: 30,
       payMethod: '微信支付',
       payTime: '2026-06-08T11:45:15Z',
       transactionId: '2026060833334444'
-    }
+    },
+    paymentRecords: [
+      {
+        id: 'p4',
+        type: 'original',
+        amount: 30,
+        payMethod: '微信支付',
+        payTime: '2026-06-08T11:45:15Z',
+        transactionId: '2026060833334444'
+      }
+    ]
   },
   {
     id: 'b6',
@@ -138,11 +182,22 @@ export const bookings: Booking[] = [
     createTime: '2026-06-02T09:00:00Z',
     paymentRecord: {
       id: 'p5',
+      type: 'original',
       amount: 25,
       payMethod: '支付宝',
       payTime: '2026-06-02T09:00:08Z',
       transactionId: '2026060255556666'
     },
+    paymentRecords: [
+      {
+        id: 'p5',
+        type: 'original',
+        amount: 25,
+        payMethod: '支付宝',
+        payTime: '2026-06-02T09:00:08Z',
+        transactionId: '2026060255556666'
+      }
+    ],
     review: {
       id: 'r2',
       rating: 4,

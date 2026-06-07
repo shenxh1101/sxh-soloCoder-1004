@@ -22,7 +22,7 @@ interface BookingCardProps {
 }
 
 const BookingCard: React.FC<BookingCardProps> = ({ booking }) => {
-  const { cancelBooking, addReview, addMessage, rescheduleBooking, getVenueById, getBookedSlotIds, getMaintenanceSlotIds } = useAppStore();
+  const { cancelBooking, addReview, addMessage, rescheduleBooking, getVenueById, getBookedSlotIds, getMaintenanceSlotIds, updateBooking } = useAppStore();
   const [showReview, setShowReview] = useState(false);
   const [rating, setRating] = useState(5);
   const [reviewContent, setReviewContent] = useState('');
@@ -104,9 +104,18 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking }) => {
     }
     console.log('[BookingCard] 确认改期:', booking.id, rescheduleDate, rescheduleSlot);
 
+    const priceDiff = rescheduleSlot.price - booking.price;
+    let confirmContent = `确定要将预约改期到 ${rescheduleDate} ${rescheduleSlot.startTime}-${rescheduleSlot.endTime} 吗？`;
+
+    if (priceDiff > 0) {
+      confirmContent += `\n\n需补差价：¥${priceDiff}`;
+    } else if (priceDiff < 0) {
+      confirmContent += `\n\n将退还差价：¥${Math.abs(priceDiff)}`;
+    }
+
     Taro.showModal({
       title: '确认改期',
-      content: `确定要将预约改期到 ${rescheduleDate} ${rescheduleSlot.startTime}-${rescheduleSlot.endTime} 吗？`,
+      content: confirmContent,
       success: (res) => {
         if (res.confirm) {
           const success = rescheduleBooking(
@@ -117,24 +126,53 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking }) => {
             rescheduleSlot.price
           );
           if (success) {
-            const priceDiff = rescheduleSlot.price - booking.price;
+            const newPaymentRecords = [...(booking.paymentRecords || [])];
+            if (booking.paymentRecord && (!booking.paymentRecords || booking.paymentRecords.length === 0)) {
+              newPaymentRecords.unshift({
+                ...booking.paymentRecord,
+                type: 'original'
+              });
+            }
+
+            if (priceDiff !== 0) {
+              const newRecord = {
+                id: generateId(),
+                type: priceDiff > 0 ? 'difference' : 'refund' as const,
+                amount: Math.abs(priceDiff),
+                payMethod: booking.paymentRecord?.payMethod || '微信支付',
+                payTime: new Date().toISOString(),
+                transactionId: `${priceDiff > 0 ? 'DIF' : 'REF'}-${Date.now()}`
+              };
+              newPaymentRecords.push(newRecord);
+            }
+
+            updateBooking(booking.id, {
+              paymentRecords: newPaymentRecords,
+              paymentRecord: newPaymentRecords[0]
+            });
+
             let priceMsg = '';
             if (priceDiff > 0) {
-              priceMsg = `需补差价 ¥${priceDiff}，将从原支付账户扣除。`;
+              priceMsg = `需补差价 ¥${priceDiff}，已从原支付账户扣除。`;
             } else if (priceDiff < 0) {
               priceMsg = `将退还差价 ¥${Math.abs(priceDiff)}，1-3个工作日内到账。`;
-            } else {
-              priceMsg = '价格不变，无需额外操作。';
             }
+
+            let messageContent = `您预约的${booking.venueName}已改期：\n原时间：${booking.date} ${booking.timeSlot}\n新时间：${rescheduleDate} ${rescheduleSlot.startTime}-${rescheduleSlot.endTime}\n新价格：¥${rescheduleSlot.price}`;
+            if (priceMsg) {
+              messageContent += `\n${priceMsg}`;
+            }
+
             addMessage({
               id: generateId(),
               type: 'booking',
               title: '改期成功',
-              content: `您预约的${booking.venueName}已改期：\n原时间：${booking.date} ${booking.timeSlot}\n新时间：${rescheduleDate} ${rescheduleSlot.startTime}-${rescheduleSlot.endTime}\n新价格：¥${rescheduleSlot.price}\n${priceMsg}`,
+              content: messageContent,
               time: new Date().toISOString(),
               read: false,
               relatedBookingId: booking.id
             });
+
             Taro.showToast({ title: '改期成功', icon: 'success' });
             setShowReschedule(false);
           } else {
@@ -165,7 +203,11 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking }) => {
   };
 
   const handleViewPayment = () => {
-    if (!booking.paymentRecord) {
+    const allRecords = booking.paymentRecords && booking.paymentRecords.length > 0
+      ? booking.paymentRecords
+      : (booking.paymentRecord ? [{ ...booking.paymentRecord, type: 'original' as const }] : []);
+
+    if (allRecords.length === 0) {
       Taro.showModal({
         title: '付款记录',
         content: '该订单暂无付款记录，可能是预约尚未完成支付或支付信息未同步。',
@@ -175,10 +217,25 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking }) => {
       });
       return;
     }
-    console.log('[BookingCard] 查看付款记录:', booking.paymentRecord);
+
+    console.log('[BookingCard] 查看付款记录:', allRecords);
+
+    const getTypeLabel = (type: string) => {
+      switch (type) {
+        case 'original': return '💳 原支付';
+        case 'difference': return '💵 补差价';
+        case 'refund': return '💰 退款';
+        default: return '💳 支付';
+      }
+    };
+
+    const content = allRecords.map((r, index) => {
+      return `${index + 1}. ${getTypeLabel(r.type)}\n   金额：¥${r.amount}\n   支付方式：${r.payMethod}\n   时间：${formatDateTime(r.payTime)}\n   单号：${r.transactionId}`;
+    }).join('\n\n');
+
     Taro.showModal({
       title: '付款记录',
-      content: `金额：¥${booking.paymentRecord.amount}\n支付方式：${booking.paymentRecord.payMethod}\n支付时间：${formatDateTime(booking.paymentRecord.payTime)}\n交易单号：${booking.paymentRecord.transactionId}`,
+      content,
       showCancel: false
     }).catch((err) => {
       console.error('[BookingCard] 显示付款记录失败:', err);
@@ -186,9 +243,9 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking }) => {
   };
 
   const handleViewVenue = () => {
-    console.log('[BookingCard] 查看场地详情:', booking.venueId);
+    console.log('[BookingCard] 查看场地详情:', booking.venueId, booking.date);
     Taro.navigateTo({
-      url: `/pages/venue-detail/index?id=${booking.venueId}`
+      url: `/pages/venue-detail/index?id=${booking.venueId}&date=${booking.date}`
     }).catch((err) => {
       console.error('[BookingCard] 跳转场地详情失败:', err);
     });

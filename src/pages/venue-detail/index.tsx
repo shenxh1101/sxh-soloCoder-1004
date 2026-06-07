@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, Text, Image, ScrollView, Button, Input, Textarea } from '@tarojs/components';
 import Taro, { useRouter } from '@tarojs/taro';
 import classnames from 'classnames';
@@ -21,21 +21,28 @@ const VenueDetailPage: React.FC = () => {
   const [newCompanionName, setNewCompanionName] = useState('');
   const [newCompanionPhone, setNewCompanionPhone] = useState('');
   const [showAddCompanion, setShowAddCompanion] = useState(false);
+  const [calendarView, setCalendarView] = useState<'week' | 'month'>('week');
+  const [currentMonth, setCurrentMonth] = useState(new Date());
 
   useEffect(() => {
     const id = router.params.id as string;
-    console.log('[VenueDetailPage] 场地ID:', id);
+    const dateParam = router.params.date as string;
+    console.log('[VenueDetailPage] 场地ID:', id, '日期参数:', dateParam);
     if (id) {
       const v = getVenueById(id);
       if (v) {
         setVenue(v);
         console.log('[VenueDetailPage] 加载场地信息:', v.name);
+        if (dateParam) {
+          setSelectedDate(dateParam);
+          console.log('[VenueDetailPage] 使用指定日期:', dateParam);
+        }
       } else {
         console.error('[VenueDetailPage] 场地不存在:', id);
         Taro.showToast({ title: '场地不存在', icon: 'error' });
       }
     }
-  }, [router.params.id, getVenueById]);
+  }, [router.params.id, router.params.date, getVenueById]);
 
   const bookedSlotIds = useMemo(() => {
     if (!venue) return [];
@@ -51,22 +58,68 @@ const VenueDetailPage: React.FC = () => {
     return maintenance;
   }, [venue, selectedDate, getMaintenanceSlotIds]);
 
-  const dates = useMemo(() => {
+  const getDateStats = useCallback((dateStr: string) => {
+    if (!venue) return { available: 0, booked: 0, maintenance: 0 };
+    const booked = getBookedSlotIds(venue.id, dateStr);
+    const maintenance = getMaintenanceSlotIds(venue.id, dateStr);
+    const total = venue.timeSlots.length;
+    const unavailable = new Set([...booked, ...maintenance]).size;
+    return {
+      available: total - unavailable,
+      booked: booked.length,
+      maintenance: maintenance.length
+    };
+  }, [venue, getBookedSlotIds, getMaintenanceSlotIds]);
+
+  const weekDates = useMemo(() => {
     const result = [];
     const today = new Date();
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
+    const selectedDateObj = new Date(selectedDate);
+    const startDate = selectedDate < today ? today : selectedDate;
+
+    for (let i = 0; i < 14; i++) {
+      const date = new Date(startDate);
+      date.setDate(startDate.getDate() + i);
       const dateStr = formatDate(date.toISOString());
       const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+      const stats = getDateStats(dateStr);
       result.push({
         date: dateStr,
         day: weekDays[date.getDay()],
-        dayNum: date.getDate()
+        dayNum: date.getDate(),
+        stats
       });
     }
     return result;
-  }, []);
+  }, [selectedDate, getDateStats]);
+
+  const monthDates = useMemo(() => {
+    const result = [];
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
+      const dateStr = formatDate(d.toISOString());
+      const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+      const isPast = d < today;
+      const stats = !isPast && venue ? getDateStats(dateStr) : { available: 0, booked: 0, maintenance: 0 };
+      result.push({
+        date: dateStr,
+        day: weekDays[d.getDay()],
+        dayNum: d.getDate(),
+        isPast,
+        isCurrentMonth: d.getMonth() === month,
+        stats
+      });
+    }
+    return result;
+  }, [currentMonth, venue, getDateStats]);
+
+  const dates = calendarView === 'week' ? weekDates : monthDates.filter(d => d.isCurrentMonth && !d.isPast);
 
   const handleSlotSelect = (slot: TimeSlot) => {
     console.log('[VenueDetailPage] 选择时段:', slot.startTime, slot.endTime);
@@ -116,6 +169,15 @@ const VenueDetailPage: React.FC = () => {
     const verifyCode = generateVerifyCode();
     const bookingId = generateId();
 
+    const paymentRecord = {
+      id: generateId(),
+      type: 'original' as const,
+      amount: selectedSlot.price,
+      payMethod: '微信支付',
+      payTime: new Date().toISOString(),
+      transactionId: `TXN${Date.now()}`
+    };
+
     const newBooking = {
       id: bookingId,
       venueId: venue.id,
@@ -131,13 +193,8 @@ const VenueDetailPage: React.FC = () => {
       equipmentNote,
       verifyCode,
       createTime: new Date().toISOString(),
-      paymentRecord: {
-        id: generateId(),
-        amount: selectedSlot.price,
-        payMethod: '微信支付',
-        payTime: new Date().toISOString(),
-        transactionId: `TXN${Date.now()}`
-      }
+      paymentRecord,
+      paymentRecords: [paymentRecord]
     };
 
     addBooking(newBooking);
@@ -231,7 +288,56 @@ const VenueDetailPage: React.FC = () => {
         </View>
 
         <View className={styles.section}>
-          <Text className={styles.sectionTitle}>选择日期</Text>
+          <View className={styles.calendarHeader}>
+            <Text className={styles.sectionTitle}>选择日期</Text>
+            <View className={styles.calendarViewSwitch}>
+              <View
+                className={classnames(
+                  styles.viewSwitchBtn,
+                  calendarView === 'week' && styles.viewSwitchBtnActive
+                )}
+                onClick={() => setCalendarView('week')}
+              >
+                <Text className={classnames(
+                  styles.viewSwitchText,
+                  calendarView === 'week' && styles.viewSwitchTextActive
+                )}>周视图</Text>
+              </View>
+              <View
+                className={classnames(
+                  styles.viewSwitchBtn,
+                  calendarView === 'month' && styles.viewSwitchBtnActive
+                )}
+                onClick={() => setCalendarView('month')}
+              >
+                <Text className={classnames(
+                  styles.viewSwitchText,
+                  calendarView === 'month' && styles.viewSwitchTextActive
+                )}>月视图</Text>
+              </View>
+            </View>
+          </View>
+
+          {calendarView === 'month' && (
+            <View className={styles.monthNav}>
+              <Text
+                className={styles.monthNavBtn}
+                onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
+              >
+                ‹
+              </Text>
+              <Text className={styles.monthTitle}>
+                {currentMonth.getFullYear()}年{currentMonth.getMonth() + 1}月
+              </Text>
+              <Text
+                className={styles.monthNavBtn}
+                onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
+              >
+                ›
+              </Text>
+            </View>
+          )}
+
           <ScrollView
             className={styles.dateScroll}
             scrollX
@@ -244,14 +350,16 @@ const VenueDetailPage: React.FC = () => {
                   key={d.date}
                   className={classnames(
                     styles.dateItem,
-                    selectedDate === d.date && styles.dateItemActive
+                    selectedDate === d.date && styles.dateItemActive,
+                    (d as any).isPast && styles.dateItemPast
                   )}
-                  onClick={() => setSelectedDate(d.date)}
+                  onClick={() => !(d as any).isPast && setSelectedDate(d.date)}
                 >
                   <Text
                     className={classnames(
                       styles.dateDay,
-                      selectedDate === d.date && styles.dateDayActive
+                      selectedDate === d.date && styles.dateDayActive,
+                      (d as any).isPast && styles.dateDayPast
                     )}
                   >
                     {d.day}
@@ -259,15 +367,50 @@ const VenueDetailPage: React.FC = () => {
                   <Text
                     className={classnames(
                       styles.dateNum,
-                      selectedDate === d.date && styles.dateNumActive
+                      selectedDate === d.date && styles.dateNumActive,
+                      (d as any).isPast && styles.dateNumPast
                     )}
                   >
                     {d.dayNum}
                   </Text>
+                  {venue && !(d as any).isPast && (
+                    <View className={styles.dateStats}>
+                      {d.stats.available > 0 && (
+                        <View className={classnames(styles.statDot, styles.statAvailable)}>
+                          <Text className={styles.statText}>{d.stats.available}</Text>
+                        </View>
+                      )}
+                      {d.stats.booked > 0 && (
+                        <View className={classnames(styles.statDot, styles.statBooked)}>
+                          <Text className={styles.statText}>{d.stats.booked}</Text>
+                        </View>
+                      )}
+                      {d.stats.maintenance > 0 && (
+                        <View className={classnames(styles.statDot, styles.statMaintenance)}>
+                          <Text className={styles.statText}>{d.stats.maintenance}</Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
                 </View>
               ))}
             </View>
           </ScrollView>
+
+          <View className={styles.legend}>
+            <View className={styles.legendItem}>
+              <View className={classnames(styles.legendDot, styles.statAvailable)} />
+              <Text className={styles.legendText}>可约</Text>
+            </View>
+            <View className={styles.legendItem}>
+              <View className={classnames(styles.legendDot, styles.statBooked)} />
+              <Text className={styles.legendText}>已占用</Text>
+            </View>
+            <View className={styles.legendItem}>
+              <View className={classnames(styles.legendDot, styles.statMaintenance)} />
+              <Text className={styles.legendText}>维护中</Text>
+            </View>
+          </View>
         </View>
 
         <TimeSlotPicker

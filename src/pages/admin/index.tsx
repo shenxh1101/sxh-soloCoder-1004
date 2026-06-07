@@ -10,7 +10,7 @@ import { getVenueTypeColor, formatDate, formatDateTime, generateId } from '@/uti
 import type { Booking, MessageType, Maintenance, TimeSlot } from '@/types';
 
 const AdminPage: React.FC = () => {
-  const { bookings, adminStats, venues, addMessage, updateBooking, addMaintenance, maintenances, getBookedSlotIds } = useAppStore();
+  const { bookings, adminStats, venues, addMessage, updateBooking, addMaintenance, maintenances, getBookedSlotIds, getMaintenanceSlotIds } = useAppStore();
   const [activeTab, setActiveTab] = useState<'stats' | 'verify' | 'list' | 'notice' | 'export' | 'maintenance'>('stats');
   const [verifyCode, setVerifyCode] = useState('');
   const [noticeTitle, setNoticeTitle] = useState('');
@@ -18,8 +18,10 @@ const AdminPage: React.FC = () => {
   const [noticeType, setNoticeType] = useState<MessageType>('maintenance');
   const [maintenanceVenueId, setMaintenanceVenueId] = useState('');
   const [maintenanceDate, setMaintenanceDate] = useState(formatDate(new Date().toISOString()));
-  const [maintenanceSlot, setMaintenanceSlot] = useState<TimeSlot | null>(null);
+  const [maintenanceSlots, setMaintenanceSlots] = useState<TimeSlot[]>([]);
   const [maintenanceReason, setMaintenanceReason] = useState('');
+  const [maintenanceEndDate, setMaintenanceEndDate] = useState('');
+  const [maintenanceRepeat, setMaintenanceRepeat] = useState<'none' | 'daily' | 'weekly'>('none');
 
   const tabs = [
     { key: 'stats', label: '数据统计' },
@@ -63,17 +65,71 @@ const AdminPage: React.FC = () => {
     return getBookedSlotIds(maintenanceVenueId, maintenanceDate);
   }, [maintenanceVenueId, maintenanceDate, getBookedSlotIds]);
 
+  const maintenanceMaintenanceSlotIds = useMemo(() => {
+    if (!maintenanceVenueId) return [];
+    const { getMaintenanceSlotIds } = useAppStore.getState();
+    return getMaintenanceSlotIds(maintenanceVenueId, maintenanceDate);
+  }, [maintenanceVenueId, maintenanceDate]);
+
   const activeMaintenances = useMemo(() => {
     const today = formatDate(new Date().toISOString());
     return maintenances.filter((m) => m.date >= today);
   }, [maintenances]);
+
+  const affectedBookings = useMemo(() => {
+    if (!maintenanceVenueId || maintenanceSlots.length === 0) return [];
+    const result: Booking[] = [];
+    const slotIds = maintenanceSlots.map(s => s.id);
+    bookings.forEach(booking => {
+      if (booking.venueId === maintenanceVenueId &&
+          booking.date === maintenanceDate &&
+          slotIds.some(id => booking.timeSlot.includes(id.replace('slot-', '').replace('-', ':'))) &&
+          (booking.status === 'confirmed' || booking.status === 'pending')) {
+        result.push(booking);
+      }
+    });
+    return result;
+  }, [maintenanceVenueId, maintenanceDate, maintenanceSlots, bookings]);
+
+  const generateMaintenanceDates = () => {
+    const dates: string[] = [maintenanceDate];
+    if (maintenanceRepeat === 'daily' && maintenanceEndDate) {
+      const start = new Date(maintenanceDate);
+      const end = new Date(maintenanceEndDate);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const dateStr = formatDate(d.toISOString());
+        if (dateStr !== maintenanceDate) {
+          dates.push(dateStr);
+        }
+      }
+    } else if (maintenanceRepeat === 'weekly' && maintenanceEndDate) {
+      const start = new Date(maintenanceDate);
+      const end = new Date(maintenanceEndDate);
+      const dayOfWeek = start.getDay();
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 7)) {
+        const dateStr = formatDate(d.toISOString());
+        if (dateStr !== maintenanceDate) {
+          dates.push(dateStr);
+        }
+      }
+    }
+    return dates;
+  };
+
+  const handleSlotMultiSelect = (slot: TimeSlot, isSelected: boolean) => {
+    if (isSelected) {
+      setMaintenanceSlots(maintenanceSlots.filter(s => s.id !== slot.id));
+    } else {
+      setMaintenanceSlots([...maintenanceSlots, slot]);
+    }
+  };
 
   const handleAddMaintenance = () => {
     if (!maintenanceVenueId) {
       Taro.showToast({ title: '请选择场地', icon: 'none' });
       return;
     }
-    if (!maintenanceSlot) {
+    if (maintenanceSlots.length === 0) {
       Taro.showToast({ title: '请选择时段', icon: 'none' });
       return;
     }
@@ -82,40 +138,83 @@ const AdminPage: React.FC = () => {
       return;
     }
 
+    const dates = generateMaintenanceDates();
+
     console.log('[AdminPage] 发布场地维护:', {
       venueId: maintenanceVenueId,
-      date: maintenanceDate,
-      slot: maintenanceSlot,
-      reason: maintenanceReason
+      dates,
+      slots: maintenanceSlots,
+      reason: maintenanceReason,
+      affectedBookings
     });
 
-    const newMaintenance: Maintenance = {
-      id: generateId(),
-      venueId: maintenanceVenueId,
-      venueName: selectedVenueForMaintenance!.name,
-      date: maintenanceDate,
-      slotId: maintenanceSlot.id,
-      startTime: maintenanceSlot.startTime,
-      endTime: maintenanceSlot.endTime,
-      reason: maintenanceReason.trim(),
-      createTime: new Date().toISOString()
-    };
-
-    addMaintenance(newMaintenance);
+    dates.forEach(date => {
+      maintenanceSlots.forEach(slot => {
+        const newMaintenance: Maintenance = {
+          id: generateId(),
+          venueId: maintenanceVenueId,
+          venueName: selectedVenueForMaintenance!.name,
+          date,
+          slotId: slot.id,
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          reason: maintenanceReason.trim(),
+          createTime: new Date().toISOString()
+        };
+        addMaintenance(newMaintenance);
+      });
+    });
 
     addMessage({
       id: generateId(),
       type: 'maintenance',
       title: '场地维护通知',
-      content: `${selectedVenueForMaintenance!.name} 将在 ${maintenanceDate} ${maintenanceSlot.startTime}-${maintenanceSlot.endTime} 进行${maintenanceReason.trim()}，请合理安排您的预约时间。`,
+      content: `${selectedVenueForMaintenance!.name} 将在 ${dates.join('、')} ${maintenanceSlots.map(s => `${s.startTime}-${s.endTime}`).join('、')} 进行${maintenanceReason.trim()}，请合理安排您的预约时间。`,
       time: new Date().toISOString(),
       read: false
     });
 
-    Taro.showToast({ title: '发布成功', icon: 'success' });
+    affectedBookings.forEach(booking => {
+      const refundRecord = {
+        id: generateId(),
+        type: 'refund' as const,
+        amount: booking.price,
+        payMethod: booking.paymentRecord?.payMethod || '微信支付',
+        payTime: new Date().toISOString(),
+        transactionId: `REF-${Date.now()}-${booking.id}`
+      };
+
+      updateBooking(booking.id, {
+        status: 'cancelled',
+        paymentRecords: [...(booking.paymentRecords || []), refundRecord]
+      });
+
+      addMessage({
+        id: generateId(),
+        type: 'maintenance',
+        title: '预约因维护取消',
+        content: `您预约的${booking.venueName} ${booking.date} ${booking.timeSlot} 因${maintenanceReason.trim()}已取消，全额退款 ¥${booking.price} 已原路退回，您可以选择其他时段重新预约。`,
+        time: new Date().toISOString(),
+        read: false,
+        relatedBookingId: booking.id
+      });
+    });
+
+    const dateText = dates.length > 1 ? `${dates.length}天` : dates[0];
+    const slotText = maintenanceSlots.length > 1 ? `${maintenanceSlots.length}个时段` : `${maintenanceSlots[0].startTime}-${maintenanceSlots[0].endTime}`;
+    const affectedText = affectedBookings.length > 0 ? `\n\n受影响预约：${affectedBookings.length} 单，已自动取消并退款。` : '';
+
+    Taro.showModal({
+      title: '发布成功',
+      content: `已为 ${selectedVenueForMaintenance!.name} 发布维护\n\n日期：${dateText}\n时段：${slotText}\n原因：${maintenanceReason.trim()}${affectedText}`,
+      showCancel: false
+    });
+
     setMaintenanceVenueId('');
-    setMaintenanceSlot(null);
+    setMaintenanceSlots([]);
     setMaintenanceReason('');
+    setMaintenanceEndDate('');
+    setMaintenanceRepeat('none');
   };
 
   const handleRemoveMaintenance = (id: string) => {
@@ -465,7 +564,7 @@ const AdminPage: React.FC = () => {
                       )}
                       onClick={() => {
                         setMaintenanceVenueId(v.id);
-                        setMaintenanceSlot(null);
+                        setMaintenanceSlots([]);
                       }}
                     >
                       <Text
@@ -502,7 +601,7 @@ const AdminPage: React.FC = () => {
                           )}
                           onClick={() => {
                             setMaintenanceDate(d.date);
-                            setMaintenanceSlot(null);
+                            setMaintenanceSlots([]);
                           }}
                         >
                           <Text
@@ -527,12 +626,75 @@ const AdminPage: React.FC = () => {
                   </ScrollView>
                 </View>
 
+                <View className={styles.formItem}>
+                  <Text className={styles.label}>重复设置</Text>
+                  <View className={styles.repeatOptions}>
+                    {[
+                      { key: 'none', label: '不重复' },
+                      { key: 'daily', label: '每天' },
+                      { key: 'weekly', label: '每周' }
+                    ].map((opt) => (
+                      <View
+                        key={opt.key}
+                        className={classnames(
+                          styles.repeatOption,
+                          maintenanceRepeat === opt.key && styles.repeatOptionActive
+                        )}
+                        onClick={() => setMaintenanceRepeat(opt.key as any)}
+                      >
+                        <Text
+                          className={classnames(
+                            styles.repeatOptionText,
+                            maintenanceRepeat === opt.key && styles.repeatOptionTextActive
+                          )}
+                        >
+                          {opt.label}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+
+                {maintenanceRepeat !== 'none' && (
+                  <View className={styles.formItem}>
+                    <Text className={styles.label}>结束日期</Text>
+                    <Input
+                      className={styles.formInput}
+                      type='date'
+                      value={maintenanceEndDate}
+                      onInput={(e) => setMaintenanceEndDate(e.detail.value)}
+                    />
+                  </View>
+                )}
+
                 <TimeSlotPicker
                   slots={selectedVenueForMaintenance!.timeSlots}
-                  selectedSlotId={maintenanceSlot?.id}
-                  onSelect={(slot) => setMaintenanceSlot(slot)}
+                  selectedSlotIds={maintenanceSlots.map(s => s.id)}
+                  onMultiSelect={handleSlotMultiSelect}
                   bookedSlotIds={maintenanceBookedSlotIds}
+                  maintenanceSlotIds={maintenanceMaintenanceSlotIds}
+                  title='选择时段（可多选）'
                 />
+
+                {affectedBookings.length > 0 && (
+                  <View className={styles.affectedSection}>
+                    <Text className={styles.affectedTitle}>
+                      ⚠️ 将影响 {affectedBookings.length} 个已有预约
+                    </Text>
+                    {affectedBookings.map((booking) => (
+                      <View key={booking.id} className={styles.affectedItem}>
+                        <View className={styles.affectedInfo}>
+                          <Text className={styles.affectedUser}>用户订单</Text>
+                          <Text className={styles.affectedTime}>
+                            {booking.date} {booking.timeSlot}
+                          </Text>
+                          <Text className={styles.affectedPrice}>¥{booking.price}</Text>
+                        </View>
+                        <Tag text='将自动取消并退款' bgColor='#ff7d00' size='sm' />
+                      </View>
+                    ))}
+                  </View>
+                )}
 
                 <View className={styles.formItem}>
                   <Text className={styles.label}>维护原因</Text>
@@ -544,8 +706,14 @@ const AdminPage: React.FC = () => {
                   />
                 </View>
 
-                <Button className={styles.publishBtn} onClick={handleAddMaintenance}>
-                  发布维护通知
+                <Button
+                  className={styles.publishBtn}
+                  onClick={handleAddMaintenance}
+                  disabled={maintenanceSlots.length === 0}
+                >
+                  {maintenanceSlots.length > 0
+                    ? `发布维护（已选 ${maintenanceSlots.length} 个时段）`
+                    : '请先选择时段'}
                 </Button>
               </>
             )}
